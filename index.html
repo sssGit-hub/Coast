@@ -335,8 +335,24 @@ let mysteryMap, compareMap, guessMap, guessMarker, truthMarker, lineLayer, myste
 let currentPlace=null, hasGuessed=false;
 
 function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+function regionOf(name){ const p=name.split(','); return p[p.length-1].trim(); }
 function buildDeck(){
-  return shuffle(COASTS).slice(0,TOTAL_ROUNDS).map(([name,lat,lon,z])=>({
+  // Pick TOTAL_ROUNDS entries with no two from the same country/region,
+  // so a single game never feels repetitive (e.g. two Vietnam coasts).
+  const shuffled = shuffle(COASTS);
+  const chosen = [], usedRegions = new Set();
+  for(const c of shuffled){
+    const r = regionOf(c[0]);
+    if(usedRegions.has(r)) continue;
+    usedRegions.add(r);
+    chosen.push(c);
+    if(chosen.length === TOTAL_ROUNDS) break;
+  }
+  // safety fallback (pool always far exceeds rounds, so this won't trigger)
+  if(chosen.length < TOTAL_ROUNDS){
+    for(const c of shuffled){ if(!chosen.includes(c)){ chosen.push(c); if(chosen.length===TOTAL_ROUNDS) break; } }
+  }
+  return chosen.map(([name,lat,lon,z])=>({
     name, lat:lat+(Math.random()-0.5)*0.5, lon:lon+(Math.random()-0.5)*0.5, z
   }));
 }
