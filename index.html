@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoastlineGuessr</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0d1b2a;
+    --paper: #f4ede0;
+    --paper-deep: #e8ddc9;
+    --coral: #e07a5f;
+    --gold: #d4a017;
+    --teal: #2a7f6f;
+    --line: #3d2f1f;
+    --display: 'Fraunces', serif;
+    --mono: 'Spline Sans Mono', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--mono); background: var(--paper); color: var(--ink);
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(212,160,23,0.06) 0%, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(42,127,111,0.06) 0%, transparent 40%);
+    overflow-x: hidden;
+  }
+  body::after {
+    content:""; position: fixed; inset: 0; pointer-events: none; z-index: 9999; opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* INTRO */
+  #intro {
+    position: fixed; inset: 0; z-index: 500; background: var(--ink); color: var(--paper);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 2rem; transition: opacity 0.8s ease, visibility 0.8s;
+  }
+  #intro.gone { opacity: 0; visibility: hidden; }
+  #intro .kicker { letter-spacing: 0.5em; font-size: 0.7rem; text-transform: uppercase; color: var(--gold); margin-bottom: 1.5rem; }
+  #intro h1 {
+    font-family: var(--display); font-weight: 900; font-size: clamp(2.6rem, 11vw, 7rem);
+    line-height: 0.85; letter-spacing: -0.02em; font-variation-settings: 'opsz' 144;
+  }
+  #intro h1 em { font-style: italic; color: var(--coral); font-weight: 400; }
+  #intro .sub { max-width: 460px; font-size: 0.9rem; line-height: 1.7; color: rgba(244,237,224,0.7); margin: 1.5rem 0 2.5rem; }
+  .start-btn {
+    font-family: var(--mono); font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em;
+    font-size: 0.8rem; padding: 1.1rem 2.6rem; background: var(--coral); color: var(--ink);
+    border: none; cursor: pointer; border-radius: 2px; transition: transform 0.2s, background 0.2s;
+  }
+  .start-btn:hover { transform: translateY(-3px); background: var(--gold); }
+  .globe-mark { font-size: 2.5rem; margin-bottom: 1rem; }
+
+  /* GAME */
+  #app { display: none; min-height: 100vh; padding-bottom: 2rem; }
+  #app.live { display: block; }
+  header.bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.9rem 1.5rem; border-bottom: 1.5px solid var(--line); background: var(--paper-deep);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .brand { font-family: var(--display); font-weight: 900; font-size: 1.3rem; letter-spacing: -0.01em; }
+  .brand em { font-style: italic; color: var(--coral); font-weight: 400; }
+  .stats { display: flex; gap: 1.5rem; align-items: center; }
+  .stat { text-align: right; }
+  .stat .lbl { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(13,27,42,0.5); }
+  .stat .val { font-family: var(--display); font-weight: 600; font-size: 1.3rem; line-height: 1; }
+
+  main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+  .round-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+  .round-head h2 { font-family: var(--display); font-weight: 600; font-size: 1.4rem; font-style: italic; }
+  .round-head .dots { display: flex; gap: 6px; }
+  .round-head .dots span { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line); }
+  .round-head .dots span.done { background: var(--teal); border-color: var(--teal); }
+  .round-head .dots span.now { background: var(--coral); border-color: var(--coral); }
+
+  .map-wrap { position: relative; border: 1.5px solid var(--line); border-radius: 4px; overflow: hidden; box-shadow: 8px 8px 0 rgba(13,27,42,0.12); }
+  #mystery { width: 100%; height: 460px; background: #0a1622; }
+  #guessmap { width: 100%; height: 460px; display: none; }
+  .map-badge {
+    position: absolute; top: 12px; left: 12px; z-index: 600;
+    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.2em;
+    background: var(--ink); color: var(--paper); padding: 0.45rem 0.8rem; border-radius: 2px;
+  }
+  .zoom-tag {
+    position: absolute; bottom: 12px; right: 12px; z-index: 600;
+    font-size: 0.6rem; background: rgba(13,27,42,0.7); color: var(--paper);
+    padding: 0.35rem 0.7rem; border-radius: 2px; letter-spacing: 0.1em;
+  }
+  .loading-note {
+    position:absolute; inset:0; z-index:550; display:flex; align-items:center; justify-content:center;
+    color: rgba(244,237,224,0.6); font-size:0.75rem; letter-spacing:0.2em; text-transform:uppercase;
+    pointer-events:none;
+  }
+
+  .controls { margin-top: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+  .prompt { font-size: 0.95rem; line-height: 1.6; }
+  .prompt strong { font-family: var(--display); font-style: italic; font-weight: 600; }
+  .action-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--mono); font-weight: 600; text-transform: uppercase; letter-spacing: 0.18em;
+    font-size: 0.72rem; padding: 0.9rem 1.8rem; border: 1.5px solid var(--line);
+    background: var(--ink); color: var(--paper); cursor: pointer; border-radius: 2px;
+    transition: transform 0.15s, background 0.15s, opacity 0.15s;
+  }
+  .btn:hover:not(:disabled) { transform: translateY(-2px); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  .btn.ghost:hover { background: var(--paper-deep); }
+  .btn.coral { background: var(--coral); border-color: var(--coral); color: var(--ink); }
+  .btn.coral:hover { background: var(--gold); border-color: var(--gold); }
+  .hint-note { font-size: 0.75rem; color: rgba(13,27,42,0.55); }
+
+  /* RESULT — bottom sheet, never covers controls */
+  #result {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 700;
+    transform: translateY(110%); transition: transform 0.45s cubic-bezier(.2,.9,.3,1.1);
+    display: flex; justify-content: center; padding: 1rem; pointer-events: none;
+  }
+  #result.show { transform: translateY(0); pointer-events: auto; }
+  .result-card {
+    background: var(--paper); border: 1.5px solid var(--line); border-radius: 8px 8px 0 0;
+    box-shadow: 0 -10px 40px rgba(13,27,42,0.3);
+    max-width: 560px; width: 100%; padding: 1.6rem 1.8rem;
+    display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1.4rem; align-items: center;
+  }
+  .result-card .left { text-align: center; border-right: 1.5px dashed var(--line); padding-right: 1.4rem; }
+  .result-card .pts-big { font-family: var(--display); font-weight: 900; font-size: 3.2rem; line-height: 1; color: var(--coral); }
+  .result-card .pts-lbl { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.3em; color: rgba(13,27,42,0.5); margin-top: 0.2rem; }
+  .result-card .verdict { font-family: var(--display); font-weight: 900; font-style: italic; font-size: 1.5rem; }
+  .result-card .dist { font-size: 0.8rem; color: rgba(13,27,42,0.6); margin-bottom: 0.5rem; }
+  .result-card .truth { font-size: 0.82rem; line-height: 1.5; }
+  .result-card .truth b { font-family: var(--display); font-style: italic; }
+  .result-card .nextwrap { grid-column: 1 / -1; margin-top: 1rem; }
+  #nextBtn { width: 100%; }
+  @media (max-width: 520px){
+    .result-card { grid-template-columns: 1fr; }
+    .result-card .left { border-right: none; border-bottom: 1.5px dashed var(--line); padding-right: 0; padding-bottom: 0.8rem; margin-bottom: 0.4rem; }
+  }
+
+  /* FINAL */
+  #final {
+    position: fixed; inset: 0; z-index: 800; background: var(--ink); color: var(--paper);
+    display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem;
+  }
+  #final.show { display: flex; }
+  #final .kicker { font-size: 0.7rem; letter-spacing: 0.5em; text-transform: uppercase; color: var(--gold); margin-bottom: 1rem; }
+  #final .big { font-family: var(--display); font-weight: 900; font-size: clamp(4rem,18vw,11rem); line-height: 0.85; color: var(--coral); }
+  #final .out-of { font-size: 1rem; color: rgba(244,237,224,0.5); margin: 0.5rem 0 1rem; }
+  #final .rank { font-family: var(--display); font-style: italic; font-size: 1.6rem; margin-bottom: 2rem; }
+
+  @media (max-width: 600px) {
+    #mystery, #guessmap { height: 340px; }
+    .stats { gap: 1rem; } .stat .val { font-size: 1rem; } main { padding: 1rem; }
+  }
+  .leaflet-container { background: #0a1622; }
+</style>
+</head>
+<body>
+
+<div id="intro">
+  <div class="globe-mark">◍</div>
+  <div class="kicker">a geographic guessing game</div>
+  <h1>Coastline<em>Guessr</em></h1>
+  <p class="sub">You're dropped above a mystery stretch of coast — always near land, never lost mid-ocean. No labels, no names. Read the shape of the shore, then drop your pin on the world map. The closer you land, the more you score.</p>
+  <button class="start-btn" id="beginBtn">Begin expedition →</button>
+</div>
+
+<div id="app">
+  <header class="bar">
+    <div class="brand">Coastline<em>Guessr</em></div>
+    <div class="stats">
+      <div class="stat"><div class="lbl">Round</div><div class="val" id="roundVal">1/5</div></div>
+      <div class="stat"><div class="lbl">Score</div><div class="val" id="scoreVal">0</div></div>
+    </div>
+  </header>
+  <main>
+    <div class="round-head">
+      <h2 id="roundTitle">Where in the world is this?</h2>
+      <div class="dots" id="dots"></div>
+    </div>
+    <div class="map-wrap">
+      <div id="mystery"></div>
+      <div id="guessmap"></div>
+      <div class="map-badge" id="mapBadge">The mystery view</div>
+      <div class="loading-note" id="loadNote">loading imagery…</div>
+    </div>
+    <div class="controls">
+      <p class="prompt" id="promptText">Examine the coastline above. When you're ready, hit <strong>Make my guess</strong> to open the world map and drop your pin.</p>
+      <div class="action-row">
+        <button class="btn coral" id="toGuessBtn">Make my guess →</button>
+        <button class="btn" id="confirmBtn" style="display:none;" disabled>Lock in pin</button>
+        <button class="btn ghost" id="backBtn" style="display:none;">← Back to view</button>
+        <span class="hint-note" id="hintNote"></span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="result">
+  <div class="result-card">
+    <div class="left">
+      <div class="pts-big" id="ptsBig">+820</div>
+      <div class="pts-lbl">points</div>
+    </div>
+    <div class="right">
+      <div class="verdict" id="verdict">Close!</div>
+      <div class="dist" id="distText">312 km away</div>
+      <div class="truth" id="truthText"></div>
+    </div>
+    <div class="nextwrap">
+      <button class="btn coral" id="nextBtn">Next round →</button>
+    </div>
+  </div>
+</div>
+
+<div id="final">
+  <div class="kicker">Expedition complete</div>
+  <div class="big" id="finalScore">0</div>
+  <div class="out-of">out of 5000 possible</div>
+  <div class="rank" id="finalRank">Deckhand navigator</div>
+  <button class="start-btn" id="againBtn">Sail again ↺</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ---------- COASTAL ANCHOR POOL ----------
+// Each entry sits ON or very near a coastline (never open ocean).
+// A small random jitter is applied each round so the exact view differs every play,
+// while staying on the coast.
+const COASTS = [
+  ["the southern coast of England",        50.75,  -1.30, 8],
+  ["the fjords of western Norway",         60.39,   5.32, 8],
+  ["the Amalfi coast of Italy",            40.63,  14.60, 9],
+  ["the Croatian Adriatic coast",          43.51,  16.44, 9],
+  ["the Greek island of Rhodes",           36.43,  28.22, 9],
+  ["the coast of Lisbon, Portugal",        38.70,  -9.42, 9],
+  ["the Brittany coast of France",         48.39,  -4.49, 8],
+  ["the west coast of Ireland",            53.27,  -9.05, 8],
+  ["the Icelandic peninsula near Reykjavik",64.13, -21.94, 7],
+  ["the Scottish Highlands coast",         57.48,  -4.22, 7],
+  ["the Costa Brava of Spain",             41.92,   3.16, 9],
+  ["the Danish coast near Copenhagen",     55.68,  12.57, 8],
+
+  ["the Cape Town coast, South Africa",   -33.90,  18.42, 8],
+  ["the coast near Dakar, Senegal",        14.69, -17.45, 8],
+  ["the Red Sea coast of Egypt",           27.26,  33.81, 8],
+  ["the Kenyan coast at Mombasa",          -4.04,  39.67, 8],
+  ["the island of Zanzibar, Tanzania",    -6.16,  39.20, 9],
+  ["the Moroccan Atlantic coast",          33.59,  -7.62, 8],
+  ["the coast of Madagascar",             -18.15,  49.40, 8],
+
+  ["the coast of Honshu near Tokyo, Japan",35.30, 139.67, 8],
+  ["the island of Taiwan",                 23.70, 121.00, 7],
+  ["the coast near Busan, South Korea",    35.10, 129.04, 8],
+  ["the Vietnamese coast at Da Nang",      16.05, 108.22, 8],
+  ["the island of Bali, Indonesia",        -8.65, 115.13, 9],
+  ["the coast of Phuket, Thailand",         7.89,  98.30, 9],
+  ["the coast near Chennai, India",        13.08,  80.27, 8],
+  ["the coast of Goa, India",              15.30,  73.91, 9],
+  ["the coast near Dubai, UAE",            25.20,  55.27, 8],
+  ["the coast of Sri Lanka near Colombo",   6.93,  79.85, 8],
+  ["the Hong Kong coastline",              22.28, 114.16, 9],
+  ["the coast of Manila Bay, Philippines", 14.58, 120.90, 8],
+
+  ["the coast near Sydney, Australia",    -33.87, 151.21, 8],
+  ["the coast near Perth, Australia",     -31.95, 115.86, 8],
+  ["the Great Barrier Reef coast, Cairns",-16.92, 145.77, 8],
+  ["the coast near Auckland, New Zealand",-36.85, 174.76, 8],
+  ["the South Island coast of NZ",        -43.53, 172.62, 8],
+  ["the island of Tasmania",              -42.88, 147.33, 8],
+  ["the coast of Fiji",                    -18.14, 178.44, 9],
+  ["the coast of New Caledonia",          -22.27, 166.45, 9],
+
+  ["the coast of San Francisco, USA",      37.77, -122.42, 9],
+  ["the coast of Miami, USA",              25.77,  -80.19, 9],
+  ["the coast of Cape Cod, USA",           41.67,  -70.30, 8],
+  ["the coast near Seattle, USA",          47.61, -122.34, 8],
+  ["the coast of San Diego, USA",          32.72, -117.16, 9],
+  ["the coast of Nova Scotia, Canada",     44.65,  -63.57, 8],
+  ["the coast near Vancouver, Canada",     49.28, -123.12, 8],
+  ["the Yucatán coast at Cancún, Mexico",  21.16,  -86.85, 9],
+  ["the Baja California coast, Mexico",    23.06, -109.70, 8],
+
+  ["the coast of Rio de Janeiro, Brazil", -22.95,  -43.18, 8],
+  ["the coast near Salvador, Brazil",     -12.97,  -38.50, 8],
+  ["the coast near Valparaíso, Chile",    -33.05,  -71.62, 8],
+  ["the coast of Lima, Peru",             -12.05,  -77.04, 8],
+  ["the Caribbean coast of Cartagena",     10.39,  -75.51, 9],
+  ["the coast near Buenos Aires estuary", -34.61,  -58.37, 8],
+  ["the Galápagos coast, Ecuador",         -0.74,  -90.31, 9],
+  ["the coast of Montevideo, Uruguay",    -34.90,  -56.16, 8],
+];
+
+const TOTAL_ROUNDS = 5;
+let deck = [], roundIdx = 0, totalScore = 0;
+let mysteryMap, guessMap, guessMarker, truthMarker, lineLayer, mysteryMarker;
+let currentPlace = null, hasGuessed = false;
+
+function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+// Build a fresh randomized round set, with per-round jitter so it differs every play
+function buildDeck(){
+  const picks = shuffle(COASTS).slice(0, TOTAL_ROUNDS);
+  return picks.map(([name, lat, lon, z])=>{
+    // jitter up to ~0.25° (~25km) so the framing changes but stays coastal
+    const jLat = lat + (Math.random()-0.5)*0.5;
+    const jLon = lon + (Math.random()-0.5)*0.5;
+    return { name, lat: jLat, lon: jLon, anchorLat: lat, anchorLon: lon, z };
+  });
+}
+
+function distKm(a, b){
+  const R=6371, toR=d=>d*Math.PI/180;
+  const dLat=toR(b.lat-a.lat), dLon=toR(b.lon-a.lon);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+}
+function scoreFor(km){ return Math.max(0, Math.round(1000 * Math.exp(-km / 1100))); }
+
+// Tile sources with fallback. Primary: Esri World Imagery (satellite, no labels).
+// Fallback: CARTO "no labels" raster (so city names NEVER appear, even on fallback).
+function makeImageryLayer(){
+  const esri = L.tileLayer(
+    "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    { maxZoom: 18, crossOrigin: true }
+  );
+  const labelFreeFallback = L.tileLayer(
+    "https://{s}.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}{r}.png",
+    { maxZoom: 18, subdomains:'abcd' }
+  );
+  let switched = false;
+  esri.on('tileerror', ()=>{
+    if(switched) return; switched = true;
+    mysteryMap.removeLayer(esri);
+    labelFreeFallback.addTo(mysteryMap);
+  });
+  esri.on('load', ()=>{ document.getElementById('loadNote').style.display='none'; });
+  labelFreeFallback.on('load', ()=>{ document.getElementById('loadNote').style.display='none'; });
+  return esri;
+}
+
+function initMaps(){
+  mysteryMap = L.map('mystery', { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false });
+  makeImageryLayer().addTo(mysteryMap);
+
+  guessMap = L.map('guessmap', { zoomControl:true, worldCopyJump:true, minZoom:1 }).setView([20,0], 2);
+  L.tileLayer("https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    maxZoom: 18, subdomains:'abcd'
+  }).on('tileerror', function(){
+    // fallback to OSM for the guess map too
+    if(this._fellBack) return; this._fellBack=true;
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:18}).addTo(guessMap);
+  }).addTo(guessMap);
+
+  guessMap.on('click', (e)=>{ if(!hasGuessed) placeGuess(e.latlng.lat, e.latlng.lng); });
+}
+
+function pin(color){
+  return L.divIcon({ className:'', html:`<div style="width:22px;height:22px;background:${color};border:3px solid #0d1b2a;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:2px 2px 5px rgba(0,0,0,0.4)"></div>`, iconSize:[22,22], iconAnchor:[11,22] });
+}
+
+function placeGuess(lat, lng){
+  if(guessMarker) guessMap.removeLayer(guessMarker);
+  guessMarker = L.marker([lat,lng], { icon: pin('#e07a5f') }).addTo(guessMap);
+  document.getElementById('confirmBtn').disabled = false;
+  document.getElementById('hintNote').textContent = "Pin dropped — adjust or lock it in.";
+}
+
+function renderDots(){
+  const d = document.getElementById('dots'); d.innerHTML='';
+  for(let i=0;i<TOTAL_ROUNDS;i++){
+    const s=document.createElement('span');
+    if(i<roundIdx) s.className='done'; else if(i===roundIdx) s.className='now';
+    d.appendChild(s);
+  }
+}
+
+function loadRound(){
+  currentPlace = deck[roundIdx];
+  hasGuessed = false;
+  document.getElementById('roundVal').textContent = `${roundIdx+1}/${TOTAL_ROUNDS}`;
+  document.getElementById('scoreVal').textContent = totalScore;
+  renderDots();
+
+  if(guessMarker){ guessMap.removeLayer(guessMarker); guessMarker=null; }
+  if(truthMarker){ guessMap.removeLayer(truthMarker); truthMarker=null; }
+  if(lineLayer){ guessMap.removeLayer(lineLayer); lineLayer=null; }
+  guessMap.setView([20,0], 2);
+
+  document.getElementById('mystery').style.display='block';
+  document.getElementById('guessmap').style.display='none';
+  document.getElementById('mapBadge').textContent='The mystery view';
+  document.getElementById('loadNote').style.display='flex';
+  document.getElementById('toGuessBtn').style.display='inline-block';
+  document.getElementById('confirmBtn').style.display='none';
+  document.getElementById('confirmBtn').disabled=true;
+  document.getElementById('backBtn').style.display='none';
+  document.getElementById('hintNote').textContent='';
+  document.getElementById('promptText').innerHTML = 'The marker shows the exact spot to find. Study the coastline, then hit <strong>Make my guess</strong> and drop your pin on that same place.';
+
+  setTimeout(()=>{
+    mysteryMap.invalidateSize();
+    const zoom = Math.max(4, (currentPlace.z || 8) - 3);
+    mysteryMap.setView([currentPlace.lat, currentPlace.lon], zoom, { animate:false });
+    if(mysteryMarker){ mysteryMap.removeLayer(mysteryMarker); }
+    mysteryMarker = L.marker([currentPlace.lat, currentPlace.lon], { icon: pin('#e07a5f'), interactive:false }).addTo(mysteryMap);
+  }, 80);
+}
+
+function showGuessMap(){
+  document.getElementById('mystery').style.display='none';
+  document.getElementById('guessmap').style.display='block';
+  document.getElementById('loadNote').style.display='none';
+  document.getElementById('mapBadge').textContent='Drop your pin';
+  document.getElementById('toGuessBtn').style.display='none';
+  document.getElementById('confirmBtn').style.display='inline-block';
+  document.getElementById('backBtn').style.display='inline-block';
+  document.getElementById('promptText').innerHTML = 'Click the map where you think that coastline is — just tap. Then <strong>Lock in pin</strong>.';
+  document.getElementById('hintNote').textContent = guessMarker ? '' : 'Tap the map to place your pin.';
+  setTimeout(()=> guessMap.invalidateSize(), 80);
+}
+
+function backToView(){
+  document.getElementById('mystery').style.display='block';
+  document.getElementById('guessmap').style.display='none';
+  document.getElementById('mapBadge').textContent='The mystery view';
+  document.getElementById('toGuessBtn').style.display='inline-block';
+  document.getElementById('confirmBtn').style.display='none';
+  document.getElementById('backBtn').style.display='none';
+  document.getElementById('promptText').innerHTML = 'Examine the coastline above. When you\'re ready, hit <strong>Make my guess</strong> to open the world map and drop your pin.';
+  setTimeout(()=> mysteryMap.invalidateSize(), 80);
+}
+
+function confirmGuess(){
+  if(!guessMarker || hasGuessed) return;
+  hasGuessed = true;
+  const g = guessMarker.getLatLng();
+  const km = distKm({lat:g.lat,lon:g.lng}, {lat:currentPlace.lat,lon:currentPlace.lon});
+  const pts = scoreFor(km);
+  totalScore += pts;
+
+  truthMarker = L.marker([currentPlace.lat,currentPlace.lon], { icon: pin('#2a7f6f') }).addTo(guessMap);
+  lineLayer = L.polyline([[g.lat,g.lng],[currentPlace.lat,currentPlace.lon]], { color:'#0d1b2a', weight:2, dashArray:'6 6' }).addTo(guessMap);
+  guessMap.fitBounds(lineLayer.getBounds().pad(0.5));
+
+  let verdict;
+  if(km < 50) verdict="Bullseye!";
+  else if(km < 300) verdict="So close!";
+  else if(km < 1000) verdict="Not bad.";
+  else if(km < 2500) verdict="Way off.";
+  else verdict="Lost at sea.";
+
+  document.getElementById('verdict').textContent = verdict;
+  document.getElementById('distText').textContent = km < 1 ? "<1 km away" : `${Math.round(km).toLocaleString()} km away`;
+  document.getElementById('ptsBig').textContent = '+' + pts.toLocaleString();
+  document.getElementById('truthText').innerHTML = `It was <b>${currentPlace.name}</b>.`;
+  document.getElementById('nextBtn').textContent = roundIdx < TOTAL_ROUNDS-1 ? 'Next round →' : 'See final score →';
+  document.getElementById('scoreVal').textContent = totalScore;
+
+  setTimeout(()=> document.getElementById('result').classList.add('show'), 500);
+}
+
+function nextRound(){
+  document.getElementById('result').classList.remove('show');
+  roundIdx++;
+  if(roundIdx >= TOTAL_ROUNDS){ showFinal(); return; }
+  loadRound();
+}
+
+function showFinal(){
+  document.getElementById('finalScore').textContent = totalScore.toLocaleString();
+  const pct = totalScore / (TOTAL_ROUNDS*1000);
+  let rank;
+  if(pct >= 0.9) rank="Master cartographer";
+  else if(pct >= 0.7) rank="Seasoned explorer";
+  else if(pct >= 0.5) rank="Able navigator";
+  else if(pct >= 0.3) rank="Deckhand navigator";
+  else rank="Adrift, but learning";
+  document.getElementById('finalRank').textContent = rank;
+  document.getElementById('final').classList.add('show');
+}
+
+function startGame(){
+  deck = buildDeck();
+  roundIdx = 0; totalScore = 0;
+  document.getElementById('final').classList.remove('show');
+  document.getElementById('result').classList.remove('show');
+  loadRound();
+}
+
+document.getElementById('beginBtn').addEventListener('click', ()=>{
+  document.getElementById('intro').classList.add('gone');
+  document.getElementById('app').classList.add('live');
+  if(!mysteryMap) initMaps();
+  startGame();
+});
+document.getElementById('toGuessBtn').addEventListener('click', showGuessMap);
+document.getElementById('backBtn').addEventListener('click', backToView);
+document.getElementById('confirmBtn').addEventListener('click', confirmGuess);
+document.getElementById('nextBtn').addEventListener('click', nextRound);
+document.getElementById('againBtn').addEventListener('click', ()=>{
+  document.getElementById('final').classList.remove('show');
+  startGame();
+});
+</script>
+</body>
+</html>
