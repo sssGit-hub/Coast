@@ -129,7 +129,7 @@
     flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:2rem; overflow-y:auto; }
   #final.show { display:flex; }
   #final .kicker { font-size:0.7rem; letter-spacing:0.5em; text-transform:uppercase; color:var(--gold); margin-bottom:0.8rem; }
-  #final .big { font-family:var(--display); font-weight:900; font-size:clamp(3.5rem,15vw,9rem); line-height:0.85; color:var(--coral); }
+  #final .big { font-family:var(--display); font-weight:900; font-size:clamp(2.8rem,9vw,5.5rem); line-height:1; color:var(--coral); }
   #final .out-of { font-size:0.9rem; color:rgba(244,237,224,0.5); margin:0.4rem 0 0.8rem; }
   #final .rank { font-family:var(--display); font-style:italic; font-size:1.4rem; margin-bottom:1.6rem; }
   .lb { max-width:420px; width:100%; margin-bottom:1.6rem; }
@@ -235,7 +235,6 @@
   <div class="lb">
     <h3>Global leaderboard — all-time highs</h3>
     <div id="lbList"><div class="lb-empty">Loading…</div></div>
-    <div class="lb-status" id="lbStatus"></div>
   </div>
   <div class="final-btns">
     <button class="start-btn" id="againBtn">Sail again ↺</button>
@@ -457,9 +456,9 @@ async function fetchLeaderboard(){
   return { rows: localScores().sort((a,b)=>b.score-a.score).slice(0,10), global:false };
 }
 async function renderLeaderboard(myScore){
-  const list=document.getElementById('lbList'), status=document.getElementById('lbStatus');
+  const list=document.getElementById('lbList');
   list.innerHTML='<div class="lb-empty">Loading…</div>';
-  const { rows, global } = await fetchLeaderboard();
+  const { rows } = await fetchLeaderboard();
   if(!rows.length){ list.innerHTML='<div class="lb-empty">No scores yet — you could be first.</div>'; }
   else {
     list.innerHTML='';
@@ -470,7 +469,6 @@ async function renderLeaderboard(myScore){
       list.appendChild(row);
     });
   }
-  status.textContent = global ? "Global · synced via Supabase" : (SUPABASE_URL ? "Offline — showing your local scores" : "Local only — add your Supabase URL to go global");
 }
 
 function showFinal(){
@@ -498,8 +496,8 @@ function renderModes(){
   });
 }
 
-function startGame(){
-  playerName=(document.getElementById('playerName').value||'').trim().slice(0,18)||"Anonymous";
+
+  playerName=(document.getElementById('playerName').value||'').trim().slice(0,18)||'Anonymous';
   deck=buildDeck(); roundIdx=0; totalScore=0;
   document.getElementById('modePill').textContent=`${MODES[selectedMode].label.toUpperCase()} · ×${MODES[selectedMode].mult}`;
   document.getElementById('final').classList.remove('show');
@@ -529,7 +527,7 @@ document.getElementById('changeModeBtn').addEventListener('click', ()=>{
   document.getElementById('intro').classList.remove('gone');
 });
 document.getElementById('viewLbLink').addEventListener('click', ()=>{
-  playerName=(document.getElementById('playerName').value||'').trim()||"Anonymous";
+  playerName=(document.getElementById('playerName').value||'').trim().slice(0,18)||'Anonymous';
   document.getElementById('finalScore').textContent='★';
   document.getElementById('finalOutOf').textContent='Global rankings';
   document.getElementById('finalRank').textContent='';
