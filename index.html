@@ -58,6 +58,7 @@
 
   #app { display:none; min-height:100vh; padding-bottom:2rem; }
   #app.live { display:block; }
+  #app.behind-overlay { display:none; }
   header.bar { display:flex; align-items:center; justify-content:space-between; padding:0.9rem 1.5rem;
     border-bottom:1.5px solid var(--line); background:var(--paper-deep); position:sticky; top:0; z-index:50; flex-wrap:wrap; gap:0.5rem; }
   .brand { font-family:var(--display); font-weight:900; font-size:1.3rem; letter-spacing:-0.01em; }
@@ -248,7 +249,7 @@
 // ====== SUPABASE CONFIG ======
 // Publishable (anon) key is safe in client code. To enable the GLOBAL leaderboard,
 // paste your project URL below (looks like https://xxxxxxxx.supabase.co).
-const SUPABASE_URL = "";  // <-- PASTE YOUR PROJECT URL HERE
+const SUPABASE_URL = "https://yxkxkebjckzclzpvejkj.supabase.co";  // project URL
 const SUPABASE_KEY = "sb_publishable_6yPZn7RF9Fm49f76nBsavw_HuHuqEiK";
 // Table "scores": id (int8 identity pk), name (text), score (int4), mode (text), created_at (timestamptz default now()).
 // Enable RLS with policies allowing public SELECT and INSERT.
@@ -481,6 +482,7 @@ function showFinal(){
   else if(pct>=0.5)rank="Able navigator"; else if(pct>=0.3)rank="Deckhand navigator"; else rank="Adrift, but learning";
   document.getElementById('finalRank').textContent=rank;
   document.getElementById('finalKicker').textContent="Expedition complete";
+  document.getElementById('app').classList.add('behind-overlay');
   document.getElementById('final').classList.add('show');
   submitScore({ name:playerName, score:totalScore, mode:MODES[selectedMode].label }).then(()=>renderLeaderboard(totalScore));
 }
@@ -516,10 +518,14 @@ document.getElementById('toGuessBtn').addEventListener('click', showGuessMap);
 document.getElementById('backBtn').addEventListener('click', backToView);
 document.getElementById('confirmBtn').addEventListener('click', confirmGuess);
 document.getElementById('nextBtn').addEventListener('click', nextRound);
-document.getElementById('againBtn').addEventListener('click', ()=>{ document.getElementById('final').classList.remove('show'); startGame(); });
+document.getElementById('againBtn').addEventListener('click', ()=>{
+  document.getElementById('final').classList.remove('show');
+  document.getElementById('app').classList.remove('behind-overlay');
+  startGame();
+});
 document.getElementById('changeModeBtn').addEventListener('click', ()=>{
   document.getElementById('final').classList.remove('show');
-  document.getElementById('app').classList.remove('live');
+  document.getElementById('app').classList.remove('behind-overlay','live');
   document.getElementById('intro').classList.remove('gone');
 });
 document.getElementById('viewLbLink').addEventListener('click', ()=>{
