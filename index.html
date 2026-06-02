@@ -496,7 +496,7 @@ function renderModes(){
   });
 }
 
-
+function startGame(){
   playerName=(document.getElementById('playerName').value||'').trim().slice(0,18)||'Anonymous';
   deck=buildDeck(); roundIdx=0; totalScore=0;
   document.getElementById('modePill').textContent=`${MODES[selectedMode].label.toUpperCase()} · ×${MODES[selectedMode].mult}`;
