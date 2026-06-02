@@ -65,6 +65,10 @@
   .brand em { font-style:italic; color:var(--coral); font-weight:400; }
   .mode-pill { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.2em; background:var(--ink);
     color:var(--paper); padding:0.35rem 0.7rem; border-radius:2px; margin-left:0.8rem; }
+  .quit-btn { font-family:var(--mono); font-size:0.6rem; text-transform:uppercase; letter-spacing:0.15em;
+    margin-left:0.8rem; padding:0.35rem 0.7rem; border:1px solid rgba(13,27,42,0.3); border-radius:2px;
+    background:transparent; color:rgba(13,27,42,0.45); cursor:pointer; transition:color 0.15s, border-color 0.15s; }
+  .quit-btn:hover { color:var(--coral); border-color:var(--coral); }
   .stats { display:flex; gap:1.5rem; align-items:center; }
   .stat { text-align:right; }
   .stat .lbl { font-size:0.55rem; text-transform:uppercase; letter-spacing:0.2em; color:rgba(13,27,42,0.5); }
@@ -171,6 +175,7 @@
     <div style="display:flex;align-items:center;">
       <div class="brand">Coastline<em>Guessr</em></div>
       <span class="mode-pill" id="modePill">EASY · ×1</span>
+      <button class="quit-btn" id="quitBtn" title="Quit to home">✕ Quit</button>
     </div>
     <div class="stats">
       <div class="stat"><div class="lbl">Round</div><div class="val" id="roundVal">1/5</div></div>
@@ -521,7 +526,12 @@ document.getElementById('againBtn').addEventListener('click', ()=>{
   document.getElementById('app').classList.remove('behind-overlay');
   startGame();
 });
-document.getElementById('changeModeBtn').addEventListener('click', ()=>{
+document.getElementById('quitBtn').addEventListener('click', ()=>{
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('final').classList.remove('show');
+  document.getElementById('app').classList.remove('behind-overlay','live');
+  document.getElementById('intro').classList.remove('gone');
+});
   document.getElementById('final').classList.remove('show');
   document.getElementById('app').classList.remove('behind-overlay','live');
   document.getElementById('intro').classList.remove('gone');
