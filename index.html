@@ -531,10 +531,13 @@ document.getElementById('quitBtn').addEventListener('click', ()=>{
   document.getElementById('final').classList.remove('show');
   document.getElementById('app').classList.remove('behind-overlay','live');
   document.getElementById('intro').classList.remove('gone');
+  renderModes();
 });
+document.getElementById('changeModeBtn').addEventListener('click', ()=>{
   document.getElementById('final').classList.remove('show');
   document.getElementById('app').classList.remove('behind-overlay','live');
   document.getElementById('intro').classList.remove('gone');
+  renderModes();
 });
 document.getElementById('viewLbLink').addEventListener('click', ()=>{
   playerName=(document.getElementById('playerName').value||'').trim().slice(0,18)||'Anonymous';
