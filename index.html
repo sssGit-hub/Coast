@@ -240,6 +240,8 @@
   <div class="lb">
     <h3>Global leaderboard — all-time highs</h3>
     <div id="lbList"><div class="lb-empty">Loading…</div></div>
+    <h3 id="myBestHeading" style="margin-top:1.4rem;">Your best runs</h3>
+    <div id="myBestList"><div class="lb-empty">No runs yet.</div></div>
   </div>
   <div class="final-btns">
     <button class="start-btn" id="againBtn">Sail again ↺</button>
@@ -503,6 +505,29 @@ async function fetchLeaderboard(){
   }
   return { rows: localScores().sort((a,b)=>b.score-a.score).slice(0,10), global:false };
 }
+async function fetchMyBest(){
+  if(sb && playerName && playerName!=="Anonymous"){
+    try { const { data, error } = await sb.from('scores').select('name,score,mode').eq('name',playerName).order('score',{ascending:false}).limit(3);
+      if(!error && data) return data; } catch(e){ console.warn("my-best fetch failed",e); }
+  }
+  return localScores().filter(s=>s.name===playerName).sort((a,b)=>b.score-a.score).slice(0,3);
+}
+async function renderMyBest(){
+  const heading=document.getElementById('myBestHeading'), list=document.getElementById('myBestList');
+  if(!playerName || playerName==="Anonymous"){ heading.style.display='none'; list.style.display='none'; return; }
+  heading.style.display=''; list.style.display='';
+  heading.textContent=`${playerName}'s best runs`;
+  list.innerHTML='<div class="lb-empty">Loading…</div>';
+  const mine=await fetchMyBest();
+  if(!mine.length){ list.innerHTML='<div class="lb-empty">No runs yet.</div>'; return; }
+  list.innerHTML='';
+  mine.forEach((r,i)=>{
+    const row=document.createElement('div');
+    row.className='lb-row me';
+    row.innerHTML=`<span class="rk">${i+1}</span><span class="nm">${(r.name||'Anonymous').replace(/</g,'&lt;')}</span><span class="md">${r.mode||''}</span><span class="sc">${(r.score||0).toLocaleString()}</span>`;
+    list.appendChild(row);
+  });
+}
 async function renderLeaderboard(myScore){
   const list=document.getElementById('lbList');
   list.innerHTML='<div class="lb-empty">Loading…</div>';
@@ -517,6 +542,7 @@ async function renderLeaderboard(myScore){
       list.appendChild(row);
     });
   }
+  renderMyBest();
 }
 
 function showFinal(){
