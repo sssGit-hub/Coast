@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoastlineGuessr — Spectate</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css"/>
+<style>
+  main { padding:1.5rem; max-width:1100px; margin:0 auto; }
+  #specmap { width:100%; height:480px; background:#0a1622; }
+  @media (max-width:600px){ #specmap { height:340px; } }
+  .scoreboard { max-width:520px; width:100%; margin:1.4rem auto 0; }
+  .sb-row { display:grid; grid-template-columns:auto 1fr auto; gap:0.8rem; align-items:center; padding:0.6rem 0.9rem; border-bottom:1px solid rgba(13,27,42,0.12); font-size:0.85rem; }
+  .sb-row .rk { color:var(--gold); font-weight:600; width:1.5rem; }
+  .sb-row .nm { display:flex; align-items:center; gap:0.5rem; }
+  .sb-row .dot { width:11px; height:11px; border-radius:50%; }
+  .sb-row .tot { font-family:var(--display); font-weight:600; color:var(--coral); font-size:1.05rem; }
+  .status-line { font-size:0.8rem; color:var(--teal); margin-top:0.6rem; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div style="display:flex;align-items:center;"><div class="brand">Coastline<em>Guessr</em></div><span class="pill" id="specPill">SPECTATING</span></div>
+  <a class="btn ghost" href="index.html" style="font-size:0.65rem;">Home</a>
+</header>
+
+<section class="screen active" id="spec-join" style="display:none;">
+  <div class="center-screen">
+    <div class="stack">
+      <div class="kicker" style="color:var(--gold);">spectate a game</div>
+      <input class="field code" id="specCode" maxlength="4" placeholder="CODE" style="background:rgba(13,27,42,0.05);border-color:var(--line);color:var(--ink);" />
+      <button class="btn coral" id="specWatch">Watch</button>
+      <div class="err" id="specErr" style="color:var(--coral);"></div>
+    </div>
+  </div>
+</section>
+
+<main id="spec-main" style="display:none;">
+  <div class="round-head" style="display:flex;align-items:baseline;justify-content:space-between;">
+    <h2 id="specTitle" style="font-family:var(--display);font-style:italic;font-weight:600;font-size:1.4rem;">Watching room…</h2>
+    <span class="status-line" id="specStatus"></span>
+  </div>
+  <div class="map-wrap"><div id="specmap"></div><div class="map-badge" id="specBadge">live</div></div>
+  <div class="scoreboard" id="specBoard"></div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+<script src="js/game.js"></script>
+<script src="js/spectate.js"></script>
+</body>
+</html>
