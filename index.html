@@ -81,6 +81,12 @@
   .round-head .dots span { width:9px; height:9px; border-radius:50%; border:1.5px solid var(--line); }
   .round-head .dots span.done { background:var(--teal); border-color:var(--teal); }
   .round-head .dots span.now { background:var(--coral); border-color:var(--coral); }
+  .timer { font-family:var(--display); font-weight:600; font-size:1.3rem; line-height:1; color:var(--ink);
+    background:var(--paper-deep); border:1.5px solid var(--line); border-radius:3px; padding:0.25rem 0.6rem;
+    min-width:3.2rem; text-align:center; transition:color 0.2s, background 0.2s; }
+  .timer.warn { color:#fff; background:var(--coral); border-color:var(--coral); animation:pulse 0.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.55;} }
+  .timer.hidden { visibility:hidden; }
 
   .split { display:grid; grid-template-columns:1fr; gap:1rem; }
   .split.compare { grid-template-columns:1fr 1fr; }
@@ -185,7 +191,10 @@
   <main>
     <div class="round-head">
       <h2 id="roundTitle">Where in the world is this?</h2>
-      <div class="dots" id="dots"></div>
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <div class="timer" id="timer"><span id="timerNum">30</span>s</div>
+        <div class="dots" id="dots"></div>
+      </div>
     </div>
 
     <div class="split" id="split">
@@ -252,27 +261,21 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ====== SUPABASE CONFIG ======
-// Publishable (anon) key is safe in client code. To enable the GLOBAL leaderboard,
 // paste your project URL below (looks like https://xxxxxxxx.supabase.co).
 const SUPABASE_URL = "https://yxkxkebjckzclzpvejkj.supabase.co";  // project URL
 const SUPABASE_KEY = "sb_publishable_6yPZn7RF9Fm49f76nBsavw_HuHuqEiK";
-// Table "scores": id (int8 identity pk), name (text), score (int4), mode (text), created_at (timestamptz default now()).
-// Enable RLS with policies allowing public SELECT and INSERT.
 let sb = null;
 try { if (SUPABASE_URL && window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
 catch(e){ console.warn("Supabase init failed", e); }
 
-// ====== MODES ======
 const MODES = {
-  easy:   { label:"Easy",   mult:1,   zoomAdj:-3, desc:"Wide view. Generous framing." },
-  medium: { label:"Medium", mult:1.5, zoomAdj:-2, desc:"Tighter. Less context to work with." },
-  hard:   { label:"Hard",   mult:2,   zoomAdj:-1, desc:"Close in. Coastline shape only." },
-  expert: { label:"Expert", mult:3,   zoomAdj:0,  desc:"Street-level. For true cartographers." },
+  easy:   { label:"Easy",   mult:1,   zoomAdj:-3, time:30, desc:"Wide view. 30s a round." },
+  medium: { label:"Medium", mult:1.5, zoomAdj:-2, time:22, desc:"Tighter. 22s a round." },
+  hard:   { label:"Hard",   mult:2,   zoomAdj:-1, time:16, desc:"Close in. 16s a round." },
+  expert: { label:"Expert", mult:3,   zoomAdj:0,  time:10, desc:"Tightest zoom. 10s a round." },
 };
 let selectedMode = "easy";
 
-// ====== COAST POOL ======
 const COASTS = [
   ["the southern coast of England",50.75,-1.3,8],["the fjords of western Norway",60.39,5.32,8],["the Lofoten Islands, Norway",68.15,13.61,8],
   ["the Amalfi coast of Italy",40.63,14.6,9],["the Venetian lagoon, Italy",45.43,12.33,9],["the Croatian Adriatic coast",43.51,16.44,9],
@@ -332,15 +335,14 @@ const COASTS = [
 ];
 
 const TOTAL_ROUNDS = 5;
-let deck=[], roundIdx=0, totalScore=0, playerName="Anonymous";
+let deck=[], roundIdx=0, totalScore=0, playerName="Anonymous", gameToken=null;
 let mysteryMap, compareMap, guessMap, guessMarker, truthMarker, lineLayer, mysteryMarker, compareMarker;
 let currentPlace=null, hasGuessed=false;
+let timerId=null, timeLeft=0, roundLimit=0, roundTimedOut=false;
 
 function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 function regionOf(name){ const p=name.split(','); return p[p.length-1].trim(); }
 function buildDeck(){
-  // Pick TOTAL_ROUNDS entries with no two from the same country/region,
-  // so a single game never feels repetitive (e.g. two Vietnam coasts).
   const shuffled = shuffle(COASTS);
   const chosen = [], usedRegions = new Set();
   for(const c of shuffled){
@@ -350,7 +352,6 @@ function buildDeck(){
     chosen.push(c);
     if(chosen.length === TOTAL_ROUNDS) break;
   }
-  // safety fallback (pool always far exceeds rounds, so this won't trigger)
   if(chosen.length < TOTAL_ROUNDS){
     for(const c of shuffled){ if(!chosen.includes(c)){ chosen.push(c); if(chosen.length===TOTAL_ROUNDS) break; } }
   }
@@ -398,6 +399,36 @@ function renderDots(){ const d=document.getElementById('dots'); d.innerHTML='';
   for(let i=0;i<TOTAL_ROUNDS;i++){ const s=document.createElement('span'); if(i<roundIdx)s.className='done'; else if(i===roundIdx)s.className='now'; d.appendChild(s);} }
 function mysteryZoom(){ return Math.max(3, (currentPlace.z||8) + MODES[selectedMode].zoomAdj); }
 
+function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
+function updateTimerUI(){
+  const el=document.getElementById('timer'), num=document.getElementById('timerNum');
+  num.textContent=Math.max(0,Math.ceil(timeLeft));
+  if(timeLeft<=5) el.classList.add('warn'); else el.classList.remove('warn');
+}
+function startTimer(){
+  stopTimer();
+  roundLimit=MODES[selectedMode].time;
+  timeLeft=roundLimit; roundTimedOut=false;
+  document.getElementById('timer').classList.remove('hidden');
+  updateTimerUI();
+  const tick=100;
+  timerId=setInterval(()=>{
+    timeLeft-=tick/1000;
+    if(timeLeft<=0){ timeLeft=0; updateTimerUI(); stopTimer(); onTimeout(); return; }
+    updateTimerUI();
+  }, tick);
+}
+function onTimeout(){
+  if(hasGuessed) return;
+  roundTimedOut=true;
+  if(!guessMarker){
+    hasGuessed=true;
+    resolveRound(null, 0);
+  } else {
+    confirmGuess();
+  }
+}
+
 function loadRound(){
   currentPlace=deck[roundIdx]; hasGuessed=false;
   document.getElementById('roundVal').textContent=`${roundIdx+1}/${TOTAL_ROUNDS}`;
@@ -425,6 +456,7 @@ function loadRound(){
     mysteryMap.setView([currentPlace.lat,currentPlace.lon], mysteryZoom(), { animate:false });
     if(mysteryMarker) mysteryMap.removeLayer(mysteryMarker);
     mysteryMarker=L.marker([currentPlace.lat,currentPlace.lon],{ icon:pin('#e07a5f'), interactive:false }).addTo(mysteryMap);
+    startTimer();
   },80);
 }
 
@@ -460,23 +492,50 @@ function backToView(){
 }
 
 function confirmGuess(){
-  if(!guessMarker||hasGuessed) return;
+  if(hasGuessed && !roundTimedOut) return;
+  if(!guessMarker && !roundTimedOut) return;
   hasGuessed=true;
+  stopTimer();
+  if(!guessMarker){ resolveRound(null, 0); return; }
   const g=guessMarker.getLatLng();
   const km=distKm({lat:g.lat,lon:g.lng},{lat:currentPlace.lat,lon:currentPlace.lon});
   const mult=MODES[selectedMode].mult;
-  const pts=Math.round(baseScore(km)*mult);
-  totalScore+=pts;
+  let pts=baseScore(km);
+  let bonus=0;
+  if(pts>0 && !roundTimedOut){
+    const frac=Math.max(0, timeLeft/roundLimit);
+    bonus=Math.round(250*frac);
+    pts+=bonus;
+  }
+  const finalPts=roundTimedOut?0:Math.round(pts*mult);
+  resolveRound(km, finalPts, bonus, mult, g);
+}
+
+function resolveRound(km, finalPts, bonus, mult, g){
+  stopTimer();
+  document.getElementById('timer').classList.add('hidden');
+  totalScore+=finalPts;
   truthMarker=L.marker([currentPlace.lat,currentPlace.lon],{ icon:pin('#2a7f6f') }).addTo(guessMap);
-  lineLayer=L.polyline([[g.lat,g.lng],[currentPlace.lat,currentPlace.lon]],{ color:'#0d1b2a', weight:2, dashArray:'6 6' }).addTo(guessMap);
-  guessMap.fitBounds(lineLayer.getBounds().pad(0.5));
+  if(g){
+    lineLayer=L.polyline([[g.lat,g.lng],[currentPlace.lat,currentPlace.lon]],{ color:'#0d1b2a', weight:2, dashArray:'6 6' }).addTo(guessMap);
+    guessMap.fitBounds(lineLayer.getBounds().pad(0.5));
+  } else {
+    guessMap.setView([currentPlace.lat,currentPlace.lon],4);
+  }
   let verdict;
-  if(km<50)verdict="Bullseye!"; else if(km<300)verdict="So close!"; else if(km<1000)verdict="Not bad.";
+  if(roundTimedOut && !g) verdict="Out of time!";
+  else if(roundTimedOut) verdict="Too slow!";
+  else if(km<50)verdict="Bullseye!"; else if(km<300)verdict="So close!"; else if(km<1000)verdict="Not bad.";
   else if(km<2500)verdict="Way off."; else verdict="Lost at sea.";
   document.getElementById('verdict').textContent=verdict;
-  document.getElementById('distText').textContent=km<1?"<1 km away":`${Math.round(km).toLocaleString()} km away`;
-  document.getElementById('ptsBig').textContent='+'+pts.toLocaleString();
-  document.getElementById('multTag').textContent=mult>1?`${MODES[selectedMode].label} ×${mult}`:'';
+  document.getElementById('distText').textContent = km==null ? "no guess made" : (km<1?"<1 km away":`${Math.round(km).toLocaleString()} km away`);
+  document.getElementById('ptsBig').textContent='+'+finalPts.toLocaleString();
+  let tag='';
+  if(finalPts>0){
+    if(bonus>0) tag=`+${bonus} speed`;
+    if(mult>1) tag=(tag?tag+' · ':'')+`×${mult}`;
+  }
+  document.getElementById('multTag').textContent=tag;
   document.getElementById('truthText').innerHTML=`It was <b>${currentPlace.name}</b>.`;
   document.getElementById('nextBtn').textContent=roundIdx<TOTAL_ROUNDS-1?'Next round →':'See final score →';
   document.getElementById('scoreVal').textContent=totalScore;
@@ -490,13 +549,20 @@ function nextRound(){
   loadRound();
 }
 
-// ====== LEADERBOARD ======
 const LB_LOCAL_KEY = "clg_scores_v1";
 function localScores(){ try { return JSON.parse(localStorage.getItem(LB_LOCAL_KEY)||"[]"); } catch(e){ return []; } }
 function saveLocal(entry){ const a=localScores(); a.push(entry); try{localStorage.setItem(LB_LOCAL_KEY, JSON.stringify(a));}catch(e){} }
 async function submitScore(entry){
   saveLocal(entry);
-  if(sb){ try { await sb.from('scores').insert({ name:entry.name, score:entry.score, mode:entry.mode }); } catch(e){ console.warn("insert failed",e); } }
+  if(sb && gameToken){
+    try {
+      const { error } = await sb.rpc('submit_score', {
+        p_token: gameToken, p_name: entry.name, p_score: entry.score, p_mode: entry.mode
+      });
+      if(error) console.warn("submit rejected:", error.message);
+    } catch(e){ console.warn("submit failed", e); }
+    gameToken=null;
+  }
 }
 async function fetchLeaderboard(){
   if(sb){
@@ -546,7 +612,7 @@ async function renderLeaderboard(myScore){
 }
 
 function showFinal(){
-  const maxPossible=Math.round(TOTAL_ROUNDS*1000*MODES[selectedMode].mult);
+  const maxPossible=Math.round(TOTAL_ROUNDS*1250*MODES[selectedMode].mult);
   document.getElementById('finalScore').textContent=totalScore.toLocaleString();
   document.getElementById('finalOutOf').textContent=`out of ${maxPossible.toLocaleString()} possible · ${MODES[selectedMode].label} mode`;
   const pct=totalScore/maxPossible;
@@ -573,6 +639,8 @@ function renderModes(){
 function startGame(){
   playerName=(document.getElementById('playerName').value||'').trim().slice(0,18)||'Anonymous';
   deck=buildDeck(); roundIdx=0; totalScore=0;
+  gameToken=null;
+  if(sb){ sb.rpc('start_game', { p_mode: MODES[selectedMode].label }).then(({data,error})=>{ if(!error) gameToken=data; }); }
   document.getElementById('modePill').textContent=`${MODES[selectedMode].label.toUpperCase()} · ×${MODES[selectedMode].mult}`;
   document.getElementById('final').classList.remove('show');
   document.getElementById('result').classList.remove('show');
@@ -596,6 +664,7 @@ document.getElementById('againBtn').addEventListener('click', ()=>{
   startGame();
 });
 document.getElementById('quitBtn').addEventListener('click', ()=>{
+  stopTimer();
   document.getElementById('result').classList.remove('show');
   document.getElementById('final').classList.remove('show');
   document.getElementById('app').classList.remove('behind-overlay','live');
