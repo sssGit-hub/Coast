@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoastlineGuessr — Multiplayer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css"/>
+<style>
+  main { padding:1.5rem; max-width:1200px; margin:0 auto; }
+  .screen { display:none; }
+  .screen.active { display:block; }
+  .lobby-card { max-width:480px; width:100%; }
+  .player-list { display:flex; flex-direction:column; gap:0.5rem; margin:1.2rem 0; }
+  .player-chip { display:flex; align-items:center; justify-content:space-between; padding:0.7rem 1rem;
+    border:1.5px solid var(--line); border-radius:4px; background:var(--paper-deep); font-size:0.85rem; }
+  .player-chip .dot { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:0.6rem; vertical-align:middle; }
+  .player-chip .nm { font-weight:500; }
+  .player-chip .tag { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.15em; color:var(--teal); }
+  .code-display { font-family:var(--display); font-weight:900; font-size:3rem; letter-spacing:0.3em; color:var(--coral);
+    background:var(--ink); padding:0.6rem 1.4rem 0.6rem 1.7rem; border-radius:6px; display:inline-block; }
+  .copy-hint { font-size:0.7rem; color:rgba(13,27,42,0.5); margin-top:0.6rem; cursor:pointer; }
+  .copy-hint:hover { color:var(--coral); }
+
+  .round-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem; }
+  .round-head h2 { font-family:var(--display); font-weight:600; font-size:1.4rem; font-style:italic; }
+  .guess-status { font-size:0.75rem; color:var(--teal); letter-spacing:0.05em; }
+
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media (max-width:760px){ .split { grid-template-columns:1fr; } }
+  #mystery,#guessmap,#revealmap { width:100%; height:440px; background:#0a1622; }
+  @media (max-width:600px){ #mystery,#guessmap,#revealmap { height:320px; } }
+
+  .controls { margin-top:1.25rem; display:flex; flex-direction:column; gap:1rem; }
+  .prompt { font-size:0.95rem; line-height:1.6; }
+  .prompt strong { font-family:var(--display); font-style:italic; font-weight:600; }
+  .hint-note { font-size:0.75rem; color:rgba(13,27,42,0.55); }
+
+  .scoreboard { max-width:520px; width:100%; margin:1.4rem auto 0; }
+  .sb-row { display:grid; grid-template-columns:auto 1fr auto auto; gap:0.8rem; align-items:center; padding:0.6rem 0.9rem;
+    border-bottom:1px solid rgba(13,27,42,0.12); font-size:0.85rem; }
+  .dark .sb-row { border-color:rgba(244,237,224,0.12); }
+  .sb-row .rk { color:var(--gold); font-weight:600; width:1.5rem; }
+  .sb-row .nm { display:flex; align-items:center; gap:0.5rem; }
+  .sb-row .delta { font-size:0.7rem; color:var(--teal); }
+  .sb-row .tot { font-family:var(--display); font-weight:600; color:var(--coral); font-size:1.05rem; }
+
+  .reveal-legend { display:flex; flex-wrap:wrap; gap:0.8rem; margin-top:1rem; font-size:0.78rem; }
+  .reveal-legend .item { display:flex; align-items:center; gap:0.4rem; }
+  .reveal-legend .dot { width:12px; height:12px; border-radius:50%; }
+
+  #toast { position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%) translateY(120%);
+    background:var(--ink); color:var(--paper); padding:0.7rem 1.2rem; border-radius:4px; font-size:0.8rem;
+    transition:transform 0.35s; z-index:900; }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+  .err { color:var(--coral); font-size:0.78rem; min-height:1rem; }
+</style>
+</head>
+<body>
+
+<!-- HOME / JOIN SCREEN -->
+<section class="screen active" id="screen-home">
+  <div class="center-screen dark">
+    <div class="kicker">multiplayer</div>
+    <h1 class="title">Race the <em>coast</em></h1>
+    <p class="sub">Create a lobby and share the code, or join a friend's. Everyone guesses the same five coasts, live — fastest and closest wins.</p>
+    <div class="stack">
+      <input class="field" id="nameInput" maxlength="18" placeholder="Your name" />
+      <div class="row" style="gap:0.6rem;">
+        <select class="field" id="modeSelect" style="flex:1;">
+          <option value="Easy">Easy · ×1 · 35s</option>
+          <option value="Medium">Medium · ×1.5 · 26s</option>
+          <option value="Hard">Hard · ×2 · 20s</option>
+          <option value="Expert">Expert · ×3 · 16s</option>
+        </select>
+        <button class="btn coral" id="createBtn">Create lobby</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.6rem;color:rgba(244,237,224,0.4);font-size:0.7rem;">
+        <div style="flex:1;height:1px;background:rgba(244,237,224,0.15);"></div> OR <div style="flex:1;height:1px;background:rgba(244,237,224,0.15);"></div>
+      </div>
+      <div class="row" style="gap:0.6rem;">
+        <input class="field code" id="codeInput" maxlength="4" placeholder="CODE" style="flex:1;" />
+        <button class="btn ghost" id="joinBtn">Join</button>
+      </div>
+      <div class="err" id="homeErr"></div>
+      <a href="index.html" style="color:rgba(244,237,224,0.5);font-size:0.7rem;text-decoration:underline;">← back</a>
+    </div>
+  </div>
+</section>
+
+<!-- LOBBY SCREEN -->
+<section class="screen" id="screen-lobby">
+  <div class="center-screen">
+    <div class="lobby-card">
+      <div class="kicker" style="color:var(--gold);">waiting room</div>
+      <div class="code-display" id="roomCode">----</div>
+      <div class="copy-hint" id="copyHint">tap to copy invite link</div>
+      <div class="player-list" id="lobbyPlayers"></div>
+      <p class="hint-note" id="lobbyHint">Waiting for players… you need at least 2.</p>
+      <div class="row">
+        <button class="btn coral" id="startBtn" disabled>Start game</button>
+        <button class="btn ghost" id="leaveBtn">Leave</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PLAY SCREEN -->
+<section class="screen" id="screen-play">
+  <header class="bar">
+    <div style="display:flex;align-items:center;">
+      <div class="brand">Coastline<em>Guessr</em></div>
+      <span class="pill" id="playPill">EASY</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <span class="guess-status" id="guessStatus">0/0 guessed</span>
+      <div class="timer" id="timer"><span id="timerNum">30</span>s</div>
+    </div>
+  </header>
+  <main>
+    <div class="round-head">
+      <h2 id="roundTitle">Round 1 / 5</h2>
+    </div>
+    <div class="split">
+      <div class="map-wrap"><div id="mystery"></div><div class="map-badge">The mystery coast</div></div>
+      <div class="map-wrap"><div id="guessmap"></div><div class="map-badge">Drop your pin →</div></div>
+    </div>
+    <div class="controls">
+      <p class="prompt" id="playPrompt">Compare the coast on the left to the world map. Click where you think it is, then <strong>Lock in guess</strong>.</p>
+      <div class="row" style="justify-content:flex-start;">
+        <button class="btn coral" id="lockBtn" disabled>Lock in guess</button>
+        <span class="hint-note" id="playHint">Tap the map to place your pin.</span>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- REVEAL SCREEN -->
+<section class="screen" id="screen-reveal">
+  <header class="bar">
+    <div class="brand">Coastline<em>Guessr</em></div>
+    <span class="pill" id="revealPill">ROUND 1</span>
+  </header>
+  <main>
+    <div class="round-head"><h2 id="revealTitle">It was…</h2></div>
+    <div class="map-wrap"><div id="revealmap"></div><div class="map-badge" id="revealPlace"></div></div>
+    <div class="reveal-legend" id="revealLegend"></div>
+    <div class="scoreboard" id="revealScoreboard"></div>
+    <div class="row" style="margin-top:1.4rem;">
+      <button class="btn coral" id="nextBtn">Ready — next round →</button>
+      <span class="hint-note" id="revealHint"></span>
+    </div>
+  </main>
+</section>
+
+<!-- FINAL SCREEN -->
+<section class="screen" id="screen-final">
+  <div class="center-screen dark">
+    <div class="kicker">final standings</div>
+    <h1 class="title" id="winnerName" style="font-size:clamp(2rem,8vw,4rem);"></h1>
+    <div class="scoreboard dark" id="finalScoreboard"></div>
+    <div class="row" style="margin-top:1.8rem;">
+      <button class="btn coral big" id="rematchBtn">Rematch ↺</button>
+      <a class="btn ghost big" href="index.html">Home</a>
+    </div>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+<script src="js/game.js"></script>
+<script src="js/multi.js"></script>
+</body>
+</html>
