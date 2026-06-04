@@ -106,9 +106,7 @@ const _SOLO_SALT = '9352fdd7eaaeb81d318a043c359372411ef97d3fa70286b2';
 const _MULTI_SALT = 'd36892e33860a916b0af6f22056dade962d216eb7f479518';
 async function _hmacToken(salt){
   const win = Math.floor(Date.now()/1000/300).toString();
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(salt), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(salt+win));
-  return Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  return salt + win;
 }
 async function soloToken(){ return _hmacToken(_SOLO_SALT); }
 async function multiToken(){ return _hmacToken(_MULTI_SALT); }
