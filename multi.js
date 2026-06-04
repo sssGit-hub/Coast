@@ -364,6 +364,7 @@ async function onGuessUpdate(){
   checkAllGuessed();
 }
 async function checkAllGuessed(){
+  if(!isHost) return;
   const { data:g } = await sb.from('room_guesses').select('player_name').eq('room_code',roomCode).eq('round_num',roundNum);
   if(g && players.length>0 && g.length>=players.length){
     // everyone guessed → first client to notice triggers reveal
@@ -383,7 +384,18 @@ async function doReveal(){
   }
   setTimeout(()=>revealMap.invalidateSize(),80);
 
-  const rows = await rpc('reveal_round', { p_code:roomCode, p_round:roundNum });
+  let rows = [];
+  if(isHost){
+    rows = await rpc('reveal_round', { p_code:roomCode, p_round:roundNum });
+  } else {
+    // guest reads guesses; answer comes from reveal_round too but host already called it
+    // poll briefly for the data to be available
+    for(let attempt=0; attempt<5; attempt++){
+      const r = await rpc('reveal_round', { p_code:roomCode, p_round:roundNum });
+      if(r && r.length) { rows = r; break; }
+      await new Promise(res=>setTimeout(res,400));
+    }
+  }
   const list = Array.isArray(rows)?rows:[];
   if(!list.length) return;
   const ans = list[0];
