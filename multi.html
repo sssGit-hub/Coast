@@ -72,8 +72,9 @@ header.bar { display:flex; align-items:center; justify-content:space-between; pa
 
 
   main { padding:1.5rem; max-width:1200px; margin:0 auto; }
-  .screen { display:none; }
-  .screen.active { display:block; }
+  .screen { display:none; overflow:hidden; }
+  .screen.active { display:block; overflow:visible; }
+  #screen-play:not(.active), #screen-reveal:not(.active) { height:0 !important; max-height:0 !important; }
   .lobby-card { max-width:480px; width:100%; }
   .player-list { display:flex; flex-direction:column; gap:0.5rem; margin:1.2rem 0; }
   .player-chip { display:flex; align-items:center; justify-content:space-between; padding:0.7rem 1rem;
@@ -214,7 +215,8 @@ header.bar { display:flex; align-items:center; justify-content:space-between; pa
     <div class="reveal-legend" id="revealLegend"></div>
     <div class="scoreboard" id="revealScoreboard"></div>
     <div class="row" style="margin-top:1.4rem;">
-      <button class="btn coral" id="nextBtn">Ready — next round →</button>
+      <button class="btn" id="readyBtn">Ready ✓</button>
+      <button class="btn coral" id="nextBtn" style="display:none;">Next round →</button>
       <span class="hint-note" id="revealHint"></span>
     </div>
   </main>
