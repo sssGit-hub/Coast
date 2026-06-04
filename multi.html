@@ -74,7 +74,6 @@ header.bar { display:flex; align-items:center; justify-content:space-between; pa
   main { padding:1.5rem; max-width:1200px; margin:0 auto; }
   .screen { display:none; overflow:hidden; }
   .screen.active { display:block; overflow:visible; }
-  #screen-play:not(.active), #screen-reveal:not(.active) { height:0 !important; max-height:0 !important; }
   .lobby-card { max-width:480px; width:100%; }
   .player-list { display:flex; flex-direction:column; gap:0.5rem; margin:1.2rem 0; }
   .player-chip { display:flex; align-items:center; justify-content:space-between; padding:0.7rem 1rem;
@@ -93,10 +92,7 @@ header.bar { display:flex; align-items:center; justify-content:space-between; pa
 
   .split { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
   @media (max-width:760px){ .split { grid-template-columns:1fr; } }
-  @media (max-width:760px){ #screen-play.active #mystery, #screen-play.active #guessmap, #screen-reveal.active #revealmap { height:320px; } }
-  #mystery,#guessmap,#revealmap { width:100%; height:0; background:#0a1622; transition:none; }
-  #screen-play.active #mystery, #screen-play.active #guessmap { height:440px; }
-  #screen-reveal.active #revealmap { height:440px; }
+  #mystery,#guessmap,#revealmap { width:100%; height:440px; background:#0a1622; }
 
 
   .controls { margin-top:1.25rem; display:flex; flex-direction:column; gap:1rem; }
