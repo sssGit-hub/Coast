@@ -305,7 +305,7 @@ function onPlayersChanged(){
 // ---------- PLAY ----------
 async function startRound(serverStartedAt){
   show('play'); initMaps();
-  hasGuessed=false; if(guessMarker){ guessMap.removeLayer(guessMarker); guessMarker=null; }
+  hasGuessed=false; myReady=false; if(guessMarker){ guessMap.removeLayer(guessMarker); guessMarker=null; }
   document.getElementById('lockBtn').disabled=true;
   document.getElementById('playHint').textContent='Tap the map to place your pin.';
   document.getElementById('playPill').textContent=mode.toUpperCase();
@@ -420,10 +420,10 @@ async function renderRevealScoreboard(){
 document.getElementById('readyBtn').addEventListener('click', async ()=>{
   if(myReady) return;
   myReady = true;
-  document.getElementById('readyBtn').disabled = true;
+  updateReadyUI();
   try {
     await sb.from('room_players').update({ ready:true }).eq('room_code',roomCode).eq('name',me);
-  } catch(e){}
+  } catch(e){ myReady=false; updateReadyUI(); }
 });
 
 document.getElementById('nextBtn').addEventListener('click', async ()=>{
