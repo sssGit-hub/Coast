@@ -89,7 +89,7 @@ document.getElementById('createBtn').addEventListener('click', async ()=>{
     roomCode = await rpc('create_room', { p_host: me, p_mode: mode, p_h: h });
     isHost = true;
     enterLobby();
-  } catch(e){ err('Could not create lobby.'); }
+  } catch(e){ err('Could not create lobby: ' + (e.message||e)); }
 });
 document.getElementById('joinBtn').addEventListener('click', async ()=>{
   me = (document.getElementById('nameInput').value||'').trim().slice(0,18);
@@ -103,12 +103,16 @@ document.getElementById('joinBtn').addEventListener('click', async ()=>{
     const { data } = await sb.from('rooms').select('mode').eq('code', code).single();
     mode = data ? data.mode : 'Easy';
     enterLobby();
-  } catch(e){ err('Could not join — check the code.'); }
+  } catch(e){ err('Could not join: ' + (e.message||e)); }
 });
 
 // auto-join via ?room=CODE
 const urlRoom = new URLSearchParams(location.search).get('room');
 if(urlRoom){ document.getElementById('codeInput').value = urlRoom.toUpperCase(); }
+
+document.getElementById('codeInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('joinBtn').click(); });
+document.getElementById('codeInput').addEventListener('input', e=>{ e.target.value=e.target.value.toUpperCase(); });
+document.getElementById('nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('createBtn').click(); });
 
 // ---------- LOBBY ----------
 function enterLobby(){
