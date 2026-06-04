@@ -302,6 +302,14 @@ function onPlayersChanged(){
 }
 
 // ---------- PLAY ----------
+function tileToLatLon(x, y, z){
+  const n = Math.PI - 2*Math.PI*y / Math.pow(2,z);
+  return {
+    lat: 180/Math.PI * Math.atan(0.5*(Math.exp(n)-Math.exp(-n))),
+    lon: x / Math.pow(2,z) * 360 - 180
+  };
+}
+
 async function startRound(serverStartedAt){
   clearRevealCountdown();
   show('play'); initMaps();
@@ -315,14 +323,15 @@ async function startRound(serverStartedAt){
 
   const view = await rpc('get_view', { p_code: roomCode, p_round: roundNum });
   const v = Array.isArray(view)?view[0]:view;
+  const { lat: viewLat, lon: viewLon } = tileToLatLon(v.tile_x, v.tile_y, v.zoom);
   const serverStartMs = new Date(serverStartedAt || v.round_started_at).getTime();
   roundStart = serverStartMs;
   let mysteryMarker = null;
   setTimeout(()=>{
     mysteryMap.invalidateSize(); guessMap.invalidateSize();
-    mysteryMap.setView([v.view_lat, v.view_lon], v.zoom, { animate:false });
+    mysteryMap.setView([viewLat, viewLon], v.zoom, { animate:false });
     if(mysteryMarker) mysteryMap.removeLayer(mysteryMarker);
-    mysteryMarker = L.marker([v.view_lat, v.view_lon], { icon:pin('#e07a5f'), interactive:false }).addTo(mysteryMap);
+    mysteryMarker = L.marker([viewLat, viewLon], { icon:pin('#e07a5f'), interactive:false }).addTo(mysteryMap);
     startTimer(serverStartMs);
   }, 80);
   updateGuessStatus();
