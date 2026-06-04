@@ -450,9 +450,10 @@ async function updateReadyUI(){
     hint.textContent = allReady ? '' : readyCount+'/'+total+' ready';
   } else {
     rb.style.display = myReady ? 'none' : 'block';
+    rb.disabled = false;
     rb.textContent = 'Ready ✓';
     nb.style.display = 'none';
-    hint.textContent = myReady ? readyCount+'/'+total+' ready' : '';
+    hint.textContent = readyCount+'/'+total+' ready';
   }
 }
 
