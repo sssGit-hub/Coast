@@ -128,6 +128,11 @@ let colorByName = {};
 function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
+  // Hide map containers when not on play/reveal screens to prevent bleed
+  ['mystery','guessmap','revealmap'].forEach(mid=>{
+    const el = document.getElementById(mid);
+    if(el) el.style.display = (id==='play'||id==='reveal') ? 'block' : 'none';
+  });
 }
 function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
@@ -293,7 +298,7 @@ async function onRoomChange(room){
 function onPlayersChanged(){
   if(document.getElementById('screen-reveal').classList.contains('active')){
     renderRevealScoreboard();
-    checkAllReady();
+    updateReadyUI();
   }
 }
 
@@ -394,22 +399,12 @@ async function doReveal(){
   renderRevealScoreboard();
 
   myReady = false;
-  const rb = document.getElementById('readyBtn');
-  const nb = document.getElementById('nextBtn');
+  // Mark host as ready automatically
   if(isHost){
-    rb.style.display = 'none';
-    nb.style.display = 'block';
-    nb.disabled = true;
-    nb.textContent = roundNum>=5 ? 'See final standings →' : 'Next round →';
-    document.getElementById('revealHint').textContent = 'Waiting for everyone to ready up…';
-    checkAllReady();
-  } else {
-    rb.style.display = 'block';
-    rb.disabled = false;
-    rb.textContent = 'Ready ✓';
-    nb.style.display = 'none';
-    document.getElementById('revealHint').textContent = '';
+    try { await sb.from('room_players').update({ ready:true }).eq('room_code',roomCode).eq('name',me); } catch(e){}
+    myReady = true;
   }
+  updateReadyUI();
 }
 
 async function renderRevealScoreboard(){
@@ -426,9 +421,8 @@ document.getElementById('readyBtn').addEventListener('click', async ()=>{
   if(myReady) return;
   myReady = true;
   document.getElementById('readyBtn').disabled = true;
-  document.getElementById('readyBtn').textContent = 'Waiting for others…';
   try {
-    await sb.from('room_players').update({ ready: true }).eq('room_code', roomCode).eq('name', me);
+    await sb.from('room_players').update({ ready:true }).eq('room_code',roomCode).eq('name',me);
   } catch(e){}
 });
 
@@ -439,14 +433,26 @@ document.getElementById('nextBtn').addEventListener('click', async ()=>{
   try { await rpc('next_round', { p_code: roomCode }); } catch(e){}
 });
 
-async function checkAllReady(){
-  if(!isHost) return;
-  const { data } = await sb.from('room_players').select('ready').eq('room_code', roomCode);
-  const allReady = data && data.length > 0 && data.every(p => p.ready);
+async function updateReadyUI(){
+  if(!document.getElementById('screen-reveal').classList.contains('active')) return;
+  const { data } = await sb.from('room_players').select('name,ready').eq('room_code',roomCode);
+  if(!data) return;
+  const readyCount = data.filter(p=>p.ready).length;
+  const total = data.length;
+  const allReady = readyCount >= total;
+  const rb = document.getElementById('readyBtn');
   const nb = document.getElementById('nextBtn');
-  if(nb){
+  const hint = document.getElementById('revealHint');
+  if(isHost){
+    rb.style.display = 'none';
+    nb.style.display = 'block';
     nb.disabled = !allReady;
-    document.getElementById('revealHint').textContent = allReady ? '' : 'Waiting for everyone to ready up…';
+    hint.textContent = allReady ? '' : readyCount+'/'+total+' ready';
+  } else {
+    rb.style.display = myReady ? 'none' : 'block';
+    rb.textContent = 'Ready ✓';
+    nb.style.display = 'none';
+    hint.textContent = myReady ? readyCount+'/'+total+' ready' : '';
   }
 }
 
