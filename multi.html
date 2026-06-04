@@ -163,7 +163,7 @@ header.bar { display:flex; align-items:center; justify-content:space-between; pa
       <p class="hint-note" id="lobbyHint">Waiting for players… you need at least 2.</p>
       <div class="row">
         <button class="btn coral" id="startBtn" disabled>Start game</button>
-        <button class="btn ghost" id="leaveBtn">Leave</button>
+        <button class="btn coral" id="leaveBtn">Exit lobby</button>
       </div>
     </div>
   </div>
@@ -186,8 +186,8 @@ header.bar { display:flex; align-items:center; justify-content:space-between; pa
       <h2 id="roundTitle">Round 1 / 5</h2>
     </div>
     <div class="split">
-      <div class="map-wrap"><div id="mystery"></div><div class="map-badge">The mystery coast</div></div>
-      <div class="map-wrap"><div id="guessmap"></div><div class="map-badge">Drop your pin →</div></div>
+      <div class="map-wrap"><div id="mystery-clip" style="height:440px;overflow:hidden;"><div id="mystery"></div></div><div class="map-badge">The mystery coast</div></div>
+      <div class="map-wrap"><div id="guessmap-clip" style="height:440px;overflow:hidden;"><div id="guessmap"></div></div><div class="map-badge">Drop your pin →</div></div>
     </div>
     <div class="controls">
       <p class="prompt" id="playPrompt">Compare the coast on the left to the world map. Click where you think it is, then <strong>Lock in guess</strong>.</p>
@@ -207,13 +207,13 @@ header.bar { display:flex; align-items:center; justify-content:space-between; pa
   </header>
   <main>
     <div class="round-head"><h2 id="revealTitle">It was…</h2></div>
-    <div class="map-wrap"><div id="revealmap"></div><div class="map-badge" id="revealPlace"></div></div>
+    <div class="map-wrap"><div id="revealmap-clip" style="height:440px;overflow:hidden;"><div id="revealmap"></div></div><div class="map-badge" id="revealPlace"></div></div>
     <div class="reveal-legend" id="revealLegend"></div>
     <div class="scoreboard" id="revealScoreboard"></div>
-    <div class="row" style="margin-top:1.4rem;">
-      <button class="btn" id="readyBtn">Ready ✓</button>
-      <button class="btn coral" id="nextBtn" style="display:none;">Next round →</button>
-      <span class="hint-note" id="revealHint"></span>
+    <div class="row" style="margin-top:1.4rem;align-items:center;gap:1.2rem;">
+      <div id="countdownDisplay" style="font-family:var(--display);font-weight:900;font-size:2.5rem;color:var(--coral);min-width:2rem;text-align:center;">5</div>
+      <button class="btn coral" id="nextBtn" style="display:none;">Skip →</button>
+      <span class="hint-note" id="revealHint">Next round in…</span>
     </div>
   </main>
 </section>
