@@ -317,9 +317,12 @@ async function startRound(serverStartedAt){
   const v = Array.isArray(view)?view[0]:view;
   const serverStartMs = new Date(serverStartedAt || v.round_started_at).getTime();
   roundStart = serverStartMs;
+  let mysteryMarker = null;
   setTimeout(()=>{
     mysteryMap.invalidateSize(); guessMap.invalidateSize();
     mysteryMap.setView([v.view_lat, v.view_lon], v.zoom, { animate:false });
+    if(mysteryMarker) mysteryMap.removeLayer(mysteryMarker);
+    mysteryMarker = L.marker([v.view_lat, v.view_lon], { icon:pin('#e07a5f'), interactive:false }).addTo(mysteryMap);
     startTimer(serverStartMs);
   }, 80);
   updateGuessStatus();
