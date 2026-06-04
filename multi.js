@@ -1,6 +1,39 @@
 // ============ CoastlineGuessr Multiplayer ============
-const sb = window.CLG_SB;
-const { MODES, PLAYER_COLORS, distKm, pin, addImagery, streetLayer, multiToken } = window.CLG;
+
+const SUPABASE_URL = "https://yxkxkebjckzclzpvejkj.supabase.co";
+const SUPABASE_KEY = "sb_publishable_6yPZn7RF9Fm49f76nBsavw_HuHuqEiK";
+let sb = null;
+try { if (window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
+catch(e){ console.warn("Supabase init failed", e); }
+
+const MODES = {
+  Easy:   { mult:1,   zoomAdj:-3, time:35 },
+  Medium: { mult:1.5, zoomAdj:-2, time:26 },
+  Hard:   { mult:2,   zoomAdj:-1, time:20 },
+  Expert: { mult:3,   zoomAdj:0,  time:16 },
+};
+const PLAYER_COLORS = ["#e07a5f","#2a7f6f","#d4a017","#3d6db5","#9b5de5","#e36414","#06a77d","#bc4749"];
+
+function pin(color){
+  return L.divIcon({ className:'', html:`<div style="width:22px;height:22px;background:${color};border:3px solid #0d1b2a;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:2px 2px 5px rgba(0,0,0,0.4)"></div>`, iconSize:[22,22], iconAnchor:[11,22] });
+}
+function addImagery(map){
+  const esri = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom:18, crossOrigin:true });
+  const fallback = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}{r}.png", { maxZoom:18, subdomains:'abcd' });
+  let switched=false;
+  esri.on('tileerror', ()=>{ if(switched)return; switched=true; map.removeLayer(esri); fallback.addTo(map); });
+  esri.addTo(map);
+}
+function streetLayer(map){
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { maxZoom:18, subdomains:'abcd' })
+    .on('tileerror', function(){ if(this._fb)return; this._fb=true; L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(map); })
+    .addTo(map);
+}
+async function multiToken(){
+  const salt='d36892e33860a916b0af6f22056dade962d216eb7f479518';
+  const win=Math.floor(Date.now()/1000/300).toString();
+  return salt+win;
+}
 
 let me = "";              // my player name
 let roomCode = "";        // current room
@@ -17,6 +50,10 @@ let colorByName = {};
 function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
+  ['mystery','guessmap','revealmap'].forEach(mid=>{
+    const el=document.getElementById(mid);
+    if(el) el.style.display=(id==='play'||id==='reveal')?'block':'none';
+  });
 }
 function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
@@ -89,7 +126,7 @@ document.getElementById('createBtn').addEventListener('click', async ()=>{
     roomCode = await rpc('create_room', { p_host: me, p_mode: mode, p_h: h });
     isHost = true;
     enterLobby();
-  } catch(e){ err('Could not create lobby.'); }
+  } catch(e){ err('Could not create lobby: '+(e.message||e)); }
 });
 document.getElementById('joinBtn').addEventListener('click', async ()=>{
   me = (document.getElementById('nameInput').value||'').trim().slice(0,18);
@@ -109,6 +146,9 @@ document.getElementById('joinBtn').addEventListener('click', async ()=>{
 // auto-join via ?room=CODE
 const urlRoom = new URLSearchParams(location.search).get('room');
 if(urlRoom){ document.getElementById('codeInput').value = urlRoom.toUpperCase(); }
+document.getElementById('codeInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('joinBtn').click(); });
+document.getElementById('codeInput').addEventListener('input', e=>{ e.target.value=e.target.value.toUpperCase(); });
+document.getElementById('nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('createBtn').click(); });
 
 // ---------- LOBBY ----------
 function enterLobby(){
@@ -181,6 +221,7 @@ function onPlayersChanged(){
 
 // ---------- PLAY ----------
 async function startRound(serverStartedAt){
+  clearRevealCountdown();
   show('play'); initMaps();
   hasGuessed=false; if(guessMarker){ guessMap.removeLayer(guessMarker); guessMarker=null; }
   document.getElementById('lockBtn').disabled=true;
@@ -197,6 +238,8 @@ async function startRound(serverStartedAt){
   setTimeout(()=>{
     mysteryMap.invalidateSize(); guessMap.invalidateSize();
     mysteryMap.setView([v.view_lat, v.view_lon], v.zoom, { animate:false });
+    if(window._mysteryMarker) mysteryMap.removeLayer(window._mysteryMarker);
+    window._mysteryMarker = L.marker([v.view_lat,v.view_lon],{icon:pin('#e07a5f'),interactive:false}).addTo(mysteryMap);
     startTimer(serverStartMs);
   }, 80);
   updateGuessStatus();
@@ -275,7 +318,7 @@ async function doReveal(){
   if(bounds.length>1) revealMap.fitBounds(bounds, { padding:[40,40] });
   renderRevealScoreboard();
 
-  document.getElementById('nextBtn').textContent = roundNum>=5 ? 'See final standings →' : 'Ready — next round →';
+  startRevealCountdown();
 }
 
 async function renderRevealScoreboard(){
@@ -288,12 +331,32 @@ async function renderRevealScoreboard(){
   });
 }
 
-document.getElementById('nextBtn').addEventListener('click', async ()=>{
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  if(!isHost) return;
+  clearRevealCountdown();
+  doAdvanceRound();
+});
+
+let _revealCdId=null;
+function clearRevealCountdown(){ if(_revealCdId){ clearInterval(_revealCdId); _revealCdId=null; } }
+function startRevealCountdown(){
+  clearRevealCountdown();
+  document.getElementById('nextBtn').style.display = isHost ? 'block' : 'none';
+  document.getElementById('nextBtn').disabled = false;
+  document.getElementById('nextBtn').textContent = roundNum>=5 ? 'End game →' : 'Next round →';
+  document.getElementById('revealHint').textContent = 'Next round in 5…';
+  let secs=5;
+  _revealCdId=setInterval(()=>{
+    secs--;
+    if(secs>0){ document.getElementById('revealHint').textContent='Next round in '+secs+'…'; }
+    else{ clearRevealCountdown(); if(isHost) doAdvanceRound(); }
+  },1000);
+}
+async function doAdvanceRound(){
   document.getElementById('nextBtn').disabled=true;
   document.getElementById('revealHint').textContent='Advancing…';
   try { await rpc('next_round', { p_code:roomCode }); } catch(e){}
-  setTimeout(()=>{ document.getElementById('nextBtn').disabled=false; document.getElementById('revealHint').textContent=''; }, 1500);
-});
+}
 
 // ---------- FINAL ----------
 async function doFinal(){
