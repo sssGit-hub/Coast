@@ -121,7 +121,6 @@ let channel = null;       // realtime channel
 let mysteryMap, guessMap, revealMap, guessMarker;
 let timerId = null, timeLeft = 0, roundLimit = 0, hasGuessed = false, roundStart = 0;
 let players = [];         // [{name, score, ready}]
-let myReady = false;
 let colorByName = {};
 
 // ---------- screen routing ----------
@@ -129,9 +128,9 @@ function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
   // Hide map containers when not on play/reveal screens to prevent bleed
-  ['mystery','guessmap','revealmap'].forEach(mid=>{
-    const el = document.getElementById(mid);
-    if(el) el.style.display = (id==='play'||id==='reveal') ? 'block' : 'none';
+  [['mystery-clip','play'],['guessmap-clip','play'],['revealmap-clip','reveal']].forEach(([clip,screen])=>{
+    const el = document.getElementById(clip);
+    if(el) el.style.visibility = (id===screen) ? 'visible' : 'hidden';
   });
 }
 function toast(msg){
@@ -304,8 +303,9 @@ function onPlayersChanged(){
 
 // ---------- PLAY ----------
 async function startRound(serverStartedAt){
+  clearRevealCountdown();
   show('play'); initMaps();
-  hasGuessed=false; myReady=false; if(guessMarker){ guessMap.removeLayer(guessMarker); guessMarker=null; }
+  hasGuessed=false; if(guessMarker){ guessMap.removeLayer(guessMarker); guessMarker=null; }
   document.getElementById('lockBtn').disabled=true;
   document.getElementById('playHint').textContent='Tap the map to place your pin.';
   document.getElementById('playPill').textContent=mode.toUpperCase();
@@ -398,13 +398,7 @@ async function doReveal(){
   if(bounds.length>1) revealMap.fitBounds(bounds, { padding:[40,40] });
   renderRevealScoreboard();
 
-  myReady = false;
-  // Mark host as ready automatically
-  if(isHost){
-    try { await sb.from('room_players').update({ ready:true }).eq('room_code',roomCode).eq('name',me); } catch(e){}
-    myReady = true;
-  }
-  updateReadyUI();
+  startRevealCountdown();
 }
 
 async function renderRevealScoreboard(){
@@ -417,45 +411,43 @@ async function renderRevealScoreboard(){
   });
 }
 
-document.getElementById('readyBtn').addEventListener('click', async ()=>{
-  if(myReady) return;
-  myReady = true;
-  updateReadyUI();
-  try {
-    await sb.from('room_players').update({ ready:true }).eq('room_code',roomCode).eq('name',me);
-  } catch(e){ myReady=false; updateReadyUI(); }
-});
 
-document.getElementById('nextBtn').addEventListener('click', async ()=>{
+
+document.getElementById('nextBtn').addEventListener('click', ()=>{
   if(!isHost) return;
-  document.getElementById('nextBtn').disabled = true;
-  document.getElementById('revealHint').textContent = 'Advancing…';
-  try { await rpc('next_round', { p_code: roomCode }); } catch(e){}
+  clearRevealCountdown();
+  advanceRound();
 });
 
-async function updateReadyUI(){
-  if(!document.getElementById('screen-reveal').classList.contains('active')) return;
-  const { data } = await sb.from('room_players').select('name,ready').eq('room_code',roomCode);
-  if(!data) return;
-  const readyCount = data.filter(p=>p.ready).length;
-  const total = data.length;
-  const allReady = readyCount >= total;
-  const rb = document.getElementById('readyBtn');
+let revealCountdownId = null;
+function clearRevealCountdown(){ if(revealCountdownId){ clearInterval(revealCountdownId); revealCountdownId=null; } }
+
+function startRevealCountdown(){
+  clearRevealCountdown();
+  // show skip button only for host
   const nb = document.getElementById('nextBtn');
-  const hint = document.getElementById('revealHint');
-  if(isHost){
-    rb.style.display = 'none';
-    nb.style.display = 'block';
-    nb.disabled = !allReady;
-    hint.textContent = allReady ? '' : readyCount+'/'+total+' ready';
-  } else {
-    rb.style.display = myReady ? 'none' : 'block';
-    rb.disabled = false;
-    rb.textContent = 'Ready ✓';
-    nb.style.display = 'none';
-    hint.textContent = readyCount+'/'+total+' ready';
-  }
+  nb.style.display = isHost ? 'block' : 'none';
+  document.getElementById('revealHint').textContent = 'Next round in…';
+  let secs = 5;
+  const cd = document.getElementById('countdownDisplay');
+  if(cd) cd.textContent = secs;
+  revealCountdownId = setInterval(()=>{
+    secs--;
+    if(cd) cd.textContent = Math.max(0,secs);
+    if(secs <= 0){
+      clearRevealCountdown();
+      if(isHost) advanceRound();
+    }
+  }, 1000);
 }
+
+async function advanceRound(){
+  document.getElementById('revealHint').textContent = 'Advancing…';
+  document.getElementById('nextBtn').disabled = true;
+  try { await rpc('next_round', { p_code: roomCode }); } catch(e){}
+}
+
+
 
 // ---------- FINAL ----------
 async function doFinal(){
