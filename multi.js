@@ -121,6 +121,7 @@ let channel = null;       // realtime channel
 let mysteryMap, guessMap, revealMap, guessMarker;
 let timerId = null, timeLeft = 0, roundLimit = 0, hasGuessed = false, roundStart = 0;
 let players = [];         // [{name, score, ready}]
+let myReady = false;
 let colorByName = {};
 
 // ---------- screen routing ----------
@@ -290,7 +291,10 @@ async function onRoomChange(room){
 }
 
 function onPlayersChanged(){
-  if(document.getElementById('screen-reveal').classList.contains('active')) renderRevealScoreboard();
+  if(document.getElementById('screen-reveal').classList.contains('active')){
+    renderRevealScoreboard();
+    checkAllReady();
+  }
 }
 
 // ---------- PLAY ----------
@@ -389,11 +393,23 @@ async function doReveal(){
   if(bounds.length>1) revealMap.fitBounds(bounds, { padding:[40,40] });
   renderRevealScoreboard();
 
+  myReady = false;
+  const rb = document.getElementById('readyBtn');
   const nb = document.getElementById('nextBtn');
-  nb.textContent = roundNum>=5 ? 'See final standings →' : 'Next round →';
-  nb.style.display = isHost ? 'block' : 'none';
-  nb.dataset.host = isHost ? '1' : '0';
-  document.getElementById('revealHint').textContent = isHost ? '' : 'Waiting for host to advance…';
+  if(isHost){
+    rb.style.display = 'none';
+    nb.style.display = 'block';
+    nb.disabled = true;
+    nb.textContent = roundNum>=5 ? 'See final standings →' : 'Next round →';
+    document.getElementById('revealHint').textContent = 'Waiting for everyone to ready up…';
+    checkAllReady();
+  } else {
+    rb.style.display = 'block';
+    rb.disabled = false;
+    rb.textContent = 'Ready ✓';
+    nb.style.display = 'none';
+    document.getElementById('revealHint').textContent = '';
+  }
 }
 
 async function renderRevealScoreboard(){
@@ -406,13 +422,33 @@ async function renderRevealScoreboard(){
   });
 }
 
-document.getElementById('nextBtn').addEventListener('click', async ()=>{
-  if(!isHost || document.getElementById('nextBtn').dataset.host !== '1') return;
-  document.getElementById('nextBtn').disabled=true;
-  document.getElementById('revealHint').textContent='Advancing…';
-  try { await rpc('next_round', { p_code:roomCode }); } catch(e){}
-  setTimeout(()=>{ document.getElementById('nextBtn').disabled=false; document.getElementById('revealHint').textContent=''; }, 1500);
+document.getElementById('readyBtn').addEventListener('click', async ()=>{
+  if(myReady) return;
+  myReady = true;
+  document.getElementById('readyBtn').disabled = true;
+  document.getElementById('readyBtn').textContent = 'Waiting for others…';
+  try {
+    await sb.from('room_players').update({ ready: true }).eq('room_code', roomCode).eq('name', me);
+  } catch(e){}
 });
+
+document.getElementById('nextBtn').addEventListener('click', async ()=>{
+  if(!isHost) return;
+  document.getElementById('nextBtn').disabled = true;
+  document.getElementById('revealHint').textContent = 'Advancing…';
+  try { await rpc('next_round', { p_code: roomCode }); } catch(e){}
+});
+
+async function checkAllReady(){
+  if(!isHost) return;
+  const { data } = await sb.from('room_players').select('ready').eq('room_code', roomCode);
+  const allReady = data && data.length > 0 && data.every(p => p.ready);
+  const nb = document.getElementById('nextBtn');
+  if(nb){
+    nb.disabled = !allReady;
+    document.getElementById('revealHint').textContent = allReady ? '' : 'Waiting for everyone to ready up…';
+  }
+}
 
 // ---------- FINAL ----------
 async function doFinal(){
