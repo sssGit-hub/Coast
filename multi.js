@@ -389,7 +389,9 @@ async function doReveal(){
   if(bounds.length>1) revealMap.fitBounds(bounds, { padding:[40,40] });
   renderRevealScoreboard();
 
-  document.getElementById('nextBtn').textContent = roundNum>=5 ? 'See final standings →' : 'Ready — next round →';
+  document.getElementById('nextBtn').textContent = roundNum>=5 ? 'See final standings →' : 'Next round →';
+  document.getElementById('nextBtn').style.display = isHost ? '' : 'none';
+  document.getElementById('revealHint').textContent = isHost ? '' : 'Waiting for host to advance…';
 }
 
 async function renderRevealScoreboard(){
@@ -403,6 +405,7 @@ async function renderRevealScoreboard(){
 }
 
 document.getElementById('nextBtn').addEventListener('click', async ()=>{
+  if(!isHost) return;
   document.getElementById('nextBtn').disabled=true;
   document.getElementById('revealHint').textContent='Advancing…';
   try { await rpc('next_round', { p_code:roomCode }); } catch(e){}
